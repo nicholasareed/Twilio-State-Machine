@@ -1,0 +1,12 @@
+/app/tmp
+/app/config/credentials.php
+/app/config/database.php
+*.log
+*.logs
+*.svn
+.svn/*
+*.svn/*
+/logs
+*.DS_Store
+.DS_Store
+._*
