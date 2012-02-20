@@ -7,8 +7,8 @@ class User extends AppModel {
 
 	// RELATIONSHIPS
 	var $belongsTo = array('Role');
-	var $hasOne = array('Profile','Attendee');
-	var $hasMany = array('Service');
+	var $hasMany = array('Project');
+	var $hasOne = array('Profile');
 
 
 	// FUNCTIONS

@@ -51,12 +51,12 @@
 
 
 
-//phpinfo();
-//exit;
-
 // Credentials
 include_once('credentials.php');
 
+
+Configure::write('regex_chars',array(' ','[','\\','/','^','$','.','|','?','*','+','(',')','"'));
+Configure::write('http_chars',array('{','}','&','?',':','.','=','-','_'));
 
 // Server
 // - should determine the Event here
@@ -67,6 +67,17 @@ if(substr($server_name,0,4) == 'www.'){
 }
 define('SERVER_NAME',$server_name);
 
+
+// Incoming SMS Routing (fun!)
+$url = explode('.',env('HTTP_HOST')); 
+
+switch ($url[0]) { 
+	case "incoming":              
+		//Configure::write('Routing.admin', 'admin'); 
+		$_GET["url"] = "texts/incoming";
+	break; 
+	default: 
+} 
 
 // FUNCTIONS
 

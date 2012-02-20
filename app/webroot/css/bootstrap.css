@@ -196,7 +196,7 @@ body {
   color: #404040;
 }
 .container {
-  width: 940px;
+  width: 1420px;
   margin-left: auto;
   margin-right: auto;
   zoom: 1;
@@ -2638,15 +2638,17 @@ footer a {
 /* Layout */
 
 body {
-  background:#eee;
+  background:#ffffff;
 }
 
 body > .container,
 .page-edit > .container {
+  /*
   box-shadow: 0 1px 2px rgba(0,0,0,0.15);
   -webkit-box-shadow: 0 1px 2px rgba(0,0,0,0.15);
   -moz-box-shadow: 0 1px 2px rgba(0,0,0,0.15);
   background:white;
+  */
   margin-top:10px;
   border-radius:3px;
 }
@@ -2806,6 +2808,59 @@ box-shadow: inset 0px 0px 8px 1px #f08080;
   display:none;
 }
 
+span.options {
+  margin-left:25px;
+  display:none;
+}
 
+span.options a {
+  font-size:11px;
+}
 
+div.row.stepRow:hover {
+  background:#fafafa;
+}
 
+h4:hover small span.options {
+  display:inline;
+}
+
+.transparentNoHover div {
+  opacity:0.05;
+}
+
+.transparentNoHover:hover div {
+  opacity:1;
+}
+
+.invisibleNoHover div {
+  visibility:hidden;
+}
+
+.invisibleNoHover:hover div {
+  visibility:visible;
+}
+
+.remove_on_edit {
+  float:right;
+}
+
+#project_view a {
+  text-decoration:none;
+}
+
+/* Hide rows */
+.stepRow .addCondition {
+  visibility:hidden;
+}
+
+.stepRow:hover .addCondition {
+  visibility:visible;
+}
+.stepRow .addAction {
+  visibility:hidden;
+}
+
+.stepRow:hover .addAction {
+  visibility:visible;
+}

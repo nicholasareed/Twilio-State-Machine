@@ -147,7 +147,6 @@ class DarkAuthComponent extends Object {
 			'li' => $this->li,
 			'id' => $this->id,
 			'User'=>$this->getUserInfo(), 
-			'Profile' => $this->current_user['Profile'],
 			'Access'=>$this->getAccessList()
 		); 
 
@@ -323,7 +322,7 @@ class DarkAuthComponent extends Object {
 	  $field = $this->user_model_name.".".$this->user_live_field; 
 	  $conditions[$field] = $this->user_live_value; 
 	}; 
-	$this->controller->{$this->user_model_name}->contain(array('Profile',$this->group_model_name));
+	$this->controller->{$this->user_model_name}->contain(array($this->group_model_name));
 	$check = $this->controller->{$this->user_model_name}->find($conditions);
 	if($check){
 	   $this->Session->write($this->secure_key(),$check);
@@ -350,23 +349,6 @@ class DarkAuthComponent extends Object {
 		$this->li = true;
 		$this->id = $check[$this->user_model_name]['id'];
 
-		// Must be on the correct site
-		// - unless they are admin
-		if($check['User']['role_id'] == 3){
-			// Admin, do not redirect
-		} else {
-			if(strtolower($check['User']['work_state']) == 'ca'){
-				// Must be on PDC	
-				if(IDC_PDC != 'pdc'){
-					$this->controller->redirect(PDC_BASE_URL);
-				}
-			} else {
-				// Must be on IDC
-				if(IDC_PDC != 'idc'){
-					$this->controller->redirect(IDC_BASE_URL);
-				}
-			}
-		}
 
 		return true; 
 	} else {

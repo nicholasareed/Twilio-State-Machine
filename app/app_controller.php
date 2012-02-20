@@ -6,22 +6,14 @@
 		var $helpers = array('Html','Form','General');
 
 		// Default DarkAuth Access Control
-		var $_dAccess = array('*' => array('admin'));
-
-		// Default Event Access
-		var $_eRequired = true; // Required to be at an Event => always True?
-		var $_eAccess = array('*' => array('admin'));
+		var $_dAccess = array('*' => array());
 
 		// Default components
-		var $components = array('Session','RequestHandler','DarkAuth','EAuth');
+		var $components = array('Session','RequestHandler','DarkAuth');
 
 
 		function beforeFilter(){
-			// Handle theming	
-
-			// Settings
-			// - if used, get this from IDC?
-			// - settings would be on a per-Event basis
+			
 
 		}
 
