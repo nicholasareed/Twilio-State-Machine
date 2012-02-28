@@ -14,6 +14,10 @@
 									   'tablesorter.js',
 									   'boostrap-tabs.js',
 									   'bootstrap-twipsy.js',
+									   'jquery.scrollTo.js',
+									   'jquery.tmpl.min.js',
+									   'Keyboard.js',
+									   'code_keyboard.js',
 									   'code.js'));
 		if(isset($this->additionalScripts)){
 			foreach($this->additionalScripts as $script){

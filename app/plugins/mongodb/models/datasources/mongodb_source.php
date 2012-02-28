@@ -309,6 +309,7 @@ class MongodbSource extends DboSource {
 
 		$collection = $this->_db
 			->selectCollection($Model->table);
+		
 		return $collection;
 	}
 
@@ -1044,7 +1045,6 @@ class MongodbSource extends DboSource {
 		if ($Model->findQueryType === 'count') {
 			return array(array($Model->alias => array('count' => $return->count())));
 		}
-
 		if (is_object($return)) {
 			$_return = array();
 			while ($return->hasNext()) {
@@ -1366,7 +1366,7 @@ class MongodbSource extends DboSource {
 /**
  * Convert automatically array('Model.field' => 'foo') to array('field' => 'foo')
  *
- * This introduces the limitation that you can't have a (nested) field with the same name as the model
+ * This introduces the limitation that you can't have a (nested) field with the same name as the model     WHAT THE FUCK!!!
  * But it's a small price to pay to be able to use other behaviors/functionality with mongoDB
  *
  * @param array $args array()

@@ -1,5 +1,5 @@
 
-<h2>Projects</h2>
+<h2>Applications</h2>
 
 <table class="zebra-striped sortable">
 	

@@ -54,7 +54,7 @@
 			}
 
 
-			echo $this->Form->submit('Save Action', array('class' => 'btn primary', 'div' => array('class' => 'actions'), 'after' => $this->Html->link('Remove Action','/actions/remove/'.$action['Action']['id'],array('class' => 'remove_on_edit'))));
+			echo $this->Form->submit('Save Action', array('class' => 'btn primary', 'div' => array('class' => 'actions')));
 			
 
 		?>

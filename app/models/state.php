@@ -10,6 +10,10 @@ class State extends AppModel {
 
 	// FUNCTIONS
 
+	var $validate = array('key' => array('rule' => 'notEmpty',
+										 'required' => true,
+										 'allowEmpty' => false,
+										 'message' => 'Please include a state key value'));
 	
 
 

@@ -8,21 +8,14 @@
 <div id="header">
 	<div id="header_content">
 
-		<div class="row">
-			<div class="span12">
-				<h1>Twilio Frontend Builder</h1>
-			</div>
-		</div>
+		<h1>TwilioToolchain</h1>
 
-		<div class="topbar" data-dropdown="dropdown">
-			<div class="topbar-inner">
+		<div class="navbar" data-dropdown="dropdown">
+			<div class="navbar-inner">
 				<div class="container">
-					<ul class="nav">
+					<ul class="nav nav-tabs">
 						
-						<li><a href="/">Home</a></li>
-						<li><a href="/projects">Projects</a></li>
-
-
+						<li><a href="/projects">Applications</a></li>
 
 					</ul>
 
@@ -49,5 +42,7 @@
 				</div>
 			</div><!-- /topbar-inner -->
 		</div><!-- /topbar -->
+
+
 	</div>
 </div>

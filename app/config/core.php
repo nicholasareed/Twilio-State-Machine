@@ -33,7 +33,7 @@
  * In production mode, flash messages redirect after a time interval.
  * In development mode, you need to click the flash message to continue.
  */
-	Configure::write('debug', 2);
+	Configure::write('debug', 1);
 
 /**
  * CakePHP Log Level:
@@ -301,4 +301,4 @@
  *	));
  *
  */
-	Cache::config('default', array('engine' => 'File'));
+	Cache::config('default', array('engine' => 'Memcache'));

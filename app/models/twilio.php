@@ -63,7 +63,7 @@
 		}
 
 
-		function send_msg($from_ptn = '', $to_ptns = array(), $text = '', $project_id = 0){
+		function send_msg($from_ptn = '', $to_ptns = array(), $text = '', $project_id = 0, $action_id = 0){
 			// Handles same message to multiple Recipients
 
 			// Turn $to_ptns into an array
@@ -81,9 +81,10 @@
 			$segs = $this->segment_msg($text);
 
 			$Curl =& ClassRegistry::init('Curl');
+			$this->ProjectLog =& ClassRegistry::init('ProjectLog');
 
 			$this->Sent =& ClassRegistry::init('Sent');
-
+			
 			foreach($to_ptns as $to_ptn){
 				$results = array();
 				foreach($segs as $body){
@@ -100,15 +101,27 @@
 					$Body = substr($body,0,160);
 					
 					// Add to Sent
-					$sentData = array('project_id' => $project_id,
+					$sentData = array('project_id' => intval($project_id),
 									  'to_ptn' => $To,
 									  'text' => $Body,
 									  'demo_mode' => Configure::read('demo_mode'));
 					$this->Sent->create();
-					// Save
 					if(!$this->Sent->save($sentData)){
 						// Failed to save
 					}
+
+					$sent_id = $this->Sent->id;
+
+					// Log Sending to user-accessible table
+					$logData = array('project_id' => intval($project_id),
+									 'related_id' => intval($action_id), // not the Sent.id
+						 			 'request_hash' => Configure::read('request_hash'),
+									 'type' => 'action_sent_sms',
+									 'data' => json_encode(compact('To','From','Body'))
+									 );
+					$this->ProjectLog->create();
+					$this->ProjectLog->save($logData);
+
 
 					if(!Configure::read('demo_mode')){
 						$Curl->url = $url;

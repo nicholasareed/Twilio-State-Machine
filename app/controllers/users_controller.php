@@ -22,10 +22,22 @@ class UsersController extends AppController {
 
 
 	function test($value = 'no_value'){
-		echo json_encode(array('hello' => 'awesome',
-							   'value' => $value,
-							   'rec' => array('dope' => 'fresh')));
+		// Test values used by a test project
+		// - testing different webhook results and UX
+		//exit;
+		$return = array('send_sms' => 'stringhere',
+						'send_sms2' => array(array('To' => array('+16502068481','+16027059885'), 'Body' => 'input value: '.$value),
+											array('Body' => 'test')), // Can have multiple "To" fields
+						'set_state2' => 'state_2',
+						'set_attributes2' => array('a.name' => 'TxtSpring',
+												  'u.meta.inputval' => $value,
+												  'u.meta.awesome' => array('ok','cool'),
+												  'u.meta.more' => array('test1' => 'value1',
+												  					'test2' => 'value2')));
+		//pr($return);
+		echo json_encode($return);
 		exit;
+
 	}
 
 
@@ -36,8 +48,7 @@ class UsersController extends AppController {
 			$this->redirect('/pages/home');
 		}
 
-		// Dunno how we got here...
-		$this->redirect('/pages/home');
+		$this->redirect('/projects');
 
 	}
 

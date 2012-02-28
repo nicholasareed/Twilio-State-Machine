@@ -1,25 +1,8 @@
 
-<script type="text/javascript">
-	
-	/*
-	$(document).ready(function(){
-
-		$('#ActionType').on('change',function(){
-
-			
-
-		});
-
-	});
-	*/
-
-</script>
-
-
 <!-- Form -->
 <?php echo $this->Form->create('Condition', array('url' => $this->here)); ?>
 	<fieldset>
-		<legend>Edit Action</legend>
+		<legend>Edit Condition</legend>
 
 		<?
 			echo $this->General->input('Condition.type',array('label' => 'Type', 'type' => 'select', 'empty'=> true, 'options' => $types, 'disabled' => 'disabled'));
@@ -42,7 +25,7 @@
 					break;
 
 				case 'attribute':
-					echo $this->General->input('Condition.input1',array('label' => 'User Attribute', 'type' => 'text', 'help' => 'Example: u.registered=1,u.name=nick reed'));
+					echo $this->General->input('Condition.input1',array('label' => 'User Attribute', 'type' => 'text', 'help' => 'Example: u.meta.registered=1,u.meta.name=nick reed'));
 					break;
 
 				case 'default':

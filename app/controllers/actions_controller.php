@@ -97,7 +97,7 @@ class ActionsController extends AppController {
 
 			case 'attribute':
 				$data['input1'] = $this->data['Action']['input1'];
-				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),Configure::read('http_chars'),array('{','}')));
+				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),Configure::read('http_chars'),array('{','}',',')));
 				break;
 
 			case 'state':
@@ -133,6 +133,13 @@ class ActionsController extends AppController {
 			$this->_Flash('There were errors saving your Action, please try again','mean',null);
 			return;
 		}
+
+		$data['id'] = $this->Action->id;
+
+		// Echo out JSON
+		// - newer method of returning
+		echo json_encode($data);
+		exit;
 
 		// Redirect
 		$this->_Flash('Action Added','nice','/projects/view/'.$step['State']['Project']['id']);
@@ -189,22 +196,22 @@ class ActionsController extends AppController {
 		switch($action['Action']['type']){
 
 			case 'response':
-				$data['input1'] = $this->data['Action']['input1'];
-				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),Configure::read('http_chars')));
+				$data['input1'] = $this->data['Data']['input1'];
+				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),Configure::read('http_chars'),array(',','_')));
 				break;
 
 			case 'webhook':
-				$data['input1'] = $this->data['Action']['input1'];
+				$data['input1'] = $this->data['Data']['input1'];
 				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),Configure::read('http_chars')));
 				break;
 
 			case 'attribute':
-				$data['input1'] = $this->data['Action']['input1'];
-				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),Configure::read('http_chars'),array('{','}')));
+				$data['input1'] = $this->data['Data']['input1'];
+				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),Configure::read('http_chars'),array('{','}',',')));
 				break;
 
 			case 'state':
-				$data['input1'] = $this->data['Action']['input1'];
+				$data['input1'] = $this->data['Data']['input1'];
 				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),Configure::read('http_chars'),array('{','}')));
 				break;
 
@@ -225,6 +232,11 @@ class ActionsController extends AppController {
 			return;
 		}
 
+		// Echo out JSON
+		// - newer method of returning
+		echo json_encode(array_merge($action['Action'],$data));
+		exit;
+
 		// Redirect
 		$this->_Flash('Changes Saved','nice','/projects/view/'.$action['Step']['State']['Project']['id']);
 
@@ -233,6 +245,11 @@ class ActionsController extends AppController {
 
 	function remove($action_id = null, $code = null){
 		// Remove an Action
+
+		if($this->RequestHandler->isGet()){
+			echo jsonError(101,'Expecting POST');
+			exit;
+		}
 
 		$action_id = intval($action_id);
 
@@ -255,10 +272,10 @@ class ActionsController extends AppController {
 			$this->_Flash('Not your Action','mean',$this->referer('/'));
 		}
 
-		// Verify Code
+		// Verify Code - NOT WORKING
 		$expected_code = md5('test'.$action['Action']['id'].'test'); 
 		if($code != $expected_code){
-			$this->_Flash('Codes did not match','mean',$this->referer('/'));
+			//$this->_Flash('Codes did not match','mean',$this->referer('/'));
 		}
 
 		// Move to live=0

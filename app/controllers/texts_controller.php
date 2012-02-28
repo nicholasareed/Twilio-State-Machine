@@ -22,6 +22,47 @@ class TextsController extends AppController {
 	}
 
 
+	function project($project_id = null){
+
+		$project_id = intval($project_id);
+
+		if(!$this->DarkAuth->li){
+			$this->redirect('/');
+		}
+
+		if($this->RequestHandler->isGet()){
+			$this->redirect('/');
+		}
+
+		// Get Project
+		$project_id = intval($project_id);
+
+		$this->Project =& ClassRegistry::init('Project');
+		$this->Project->contain(array('State.Step' => array('Condition','Action')));
+		$conditions = array('Project.id' => $project_id,
+							'Project.user_id' => $this->DarkAuth->id,
+							'Project.live' => 1);
+		$project = $this->Project->find('first',compact('conditions'));
+
+		if(empty($project)){
+			$this->_Flash('Unable to find Project','mean','/');
+		}
+
+		// Run it
+		$this->doVerifyTwilio = false;
+		Configure::write('demo_mode',true);
+
+		$_REQUEST['To'] = trim($_POST['To']);
+		$_REQUEST['From'] = trim($_POST['From']);
+		$_REQUEST['Body'] = trim($_POST['Body']);
+
+		$this->incoming();
+
+		exit;
+
+	}
+
+
 	function test(){
 		// Test the responses with basic SMS messages
 
@@ -176,10 +217,35 @@ class TextsController extends AppController {
 			exit;
 		}
 
+		// Set Incoming information variables
+		Configure::write('To', $To);
+		Configure::write('From', $From);
+		Configure::write('Body', $Body);
+
+
+
+		// Set Project.id global
+		Configure::write('Project.id', $project['Project']['id']);
+
 		// Set Twilio variables
 		Configure::write('twilio_id',$project['User']['Profile']['twilio_id']);
 		Configure::write('twilio_secret',$project['User']['Profile']['twilio_secret']);
-		pr($project['User']['Profile']);
+
+		// Request Hash
+		// - keep all requests together
+		Configure::write('request_hash',uniqid());
+
+		// Log
+		$this->ProjectLog =& ClassRegistry::init('ProjectLog');
+		$logData = array('project_id' => $project['Project']['id'],
+						 'type' => 'received_sms',
+						 'request_hash' => Configure::read('request_hash'),
+						 'data' => json_encode(array('To' => $To,
+						 							 'From' => $From,
+						 							 'Body' => $Body))
+						 );
+		$this->ProjectLog->create();
+		$this->ProjectLog->save($logData);
 
 		// Get the Phone (and PhonesProject) if they exist
 		// - if they exist
@@ -221,13 +287,14 @@ class TextsController extends AppController {
 			}
 			$pp_id = $this->PhonesProject->id;
 		} else {
-			$pp_id = $phone['Project'][0]['id'];
+			$pp_id = $phone['Project'][0]['PhonesProject']['id'];
 		}
 
 		// Get Full Phone Project
 		$conditions = array('PhonesProject.id' => $pp_id);
 		$pp = $this->PhonesProject->find('first',compact('conditions'));
-
+		//pr($conditions);
+		//exit;
 		if(empty($pp)){
 			echo "Failed finding PhonesProject";
 			exit;
@@ -248,12 +315,23 @@ class TextsController extends AppController {
 		$state_key = array_search($pp['PhonesProject']['state'],$states);
 
 		if($state_key === false){
-			echo "Failed finding state_key"; // Probably because the "default" state was removed
+			echo "Failed finding state_key"; // Probably because the "default" state was removed!
 			exit;
 		}
 
 		$state = $project['State'][$state_key];
+		$tmp_state = $state;
+		unset($tmp_state['Step']);
 
+		// Log entered State
+		$logData = array('project_id' => $project['Project']['id'],
+						 'related_id' => $state['id'],
+						 'request_hash' => Configure::read('request_hash'),
+						 'type' => 'entered_state',
+						 'data' => json_encode($tmp_state)
+						 );
+		$this->ProjectLog->create();
+		$this->ProjectLog->save($logData);
 
 		// Test against a PhonesProject.attributes (or .meta)
 		$meta = $pp['PhonesProject']['meta'];
@@ -266,6 +344,28 @@ class TextsController extends AppController {
 		if($meta == 'fail'){
 			$meta = new Object();
 		}
+
+		Configure::write('user_meta',$meta);
+		Configure::write('original_user_meta',$meta);
+
+		// Get Application Meta
+		$app_meta = $project['Project']['meta'];
+		$original_app_meta = $app_meta;
+		try {
+			$app_meta = json_decode($app_meta);
+		} catch (Exception $e){
+			$app_meta = 'fail';
+		}
+		if($meta == 'fail'){
+			$app_meta = new Object();
+		}
+
+		Configure::write('app_meta',$app_meta);
+		Configure::write('original_app_meta',$app_meta);
+		
+		//pr('meta');
+		//pr($meta);
+		//exit;
 
 		// Move through Steps
 		foreach($state['Step'] as $step){
@@ -338,7 +438,30 @@ class TextsController extends AppController {
 									array_shift($tmp_left);
 									$the_rest = implode('.',$tmp_left);
 									$replace_with = '';
-									$replace_with = $this->json_to_string($the_rest,$meta);
+									$replace_with = $this->Project->get_json_value($the_rest,$meta);
+									// Iterate through each "or" statement on the $right
+									$right_conditions = explode('|',$right);
+									if(empty($right_conditions)){
+										$right_conditions = array('');
+									}
+									$tmp_any = false;
+									foreach($right_conditions as $right_condition){
+										if($right_condition == $replace_with){
+											$tmp_any = true;
+										}
+									}
+									if(!$tmp_any){
+										$all = false;
+										break 2;
+									}
+								
+									break;
+
+								case 'a':
+									array_shift($tmp_left);
+									$the_rest = implode('.',$tmp_left);
+									$replace_with = '';
+									$replace_with = $this->Project->get_json_value($the_rest,$app_meta);
 									// Iterate through each "or" statement on the $right
 									$right_conditions = explode('|',$right);
 									if(empty($right_conditions)){
@@ -397,6 +520,21 @@ class TextsController extends AppController {
 			if($all_matched){
 				// Great!
 				// - prevent other steps from running
+				
+				// Remove unnecessary $step values for storing
+				$tmp_step = $step;
+				unset($tmp_step['Condition']);
+				unset($tmp_step['Action']);
+
+				// Log Step matched
+				$logData = array('project_id' => $project['Project']['id'],
+								 'related_id' => $step['id'],
+						 		 'request_hash' => Configure::read('request_hash'),
+								 'type' => 'triggered_step',
+								 'data' => json_encode($tmp_step)
+								 );
+				$this->ProjectLog->create();
+				$this->ProjectLog->save($logData);
 
 				// Go through Actions
 				$action_json = array();
@@ -408,96 +546,27 @@ class TextsController extends AppController {
 							// Respond with whatever was set
 
 							// Parse the response Template
-							$response = $action['input1'];
+							$message = $action['input1'];
 
 							// Parse out the {r.value} stuff
 
-							// Do Word replacements
-							$tmp_words = explode(' ',$Body);
-							$response = $this->replace_url_brackets($tmp_words,$response);
+							$options = array('action_id' => $action['id'],
+											 'message' => $message,
+											 'To' => $From,
+											 'From' => $To);
+							$status = $this->Project->response($options);
 
-							// Iterate through each necessary replacement
-							// - this is a todo
-							preg_match_all('/{([^}]+)}/i',$response,$repl_temp);
-							$replacements = array();
-							if(!empty($repl_temp) && isset($repl_temp[1])){
-								$replacements = $repl_temp[1];
-							}
-							$replacements = array_unique($replacements);
-
-							foreach($replacements as $repl){
-								// See if the value exists
-
-								$tmp = explode('.',$repl);
-								if(count($tmp) <= 1){
-									$response = str_ireplace('{'.$repl.'}','',$response);
-									continue;
-								}
-
-								// Get the replacement value
-								$first_val = array_shift($tmp);
-								switch($first_val){
-									
-									case 'r':
-										// Response JSON object
-
-										// Does the value exist?
-										// - need to do this recursively
-										$the_rest = implode('.',$tmp);
-										$replace_with = '';
-										foreach($action_json as $action_json_obj){
-											$replace_with = $this->json_to_string($the_rest,$action_json_obj);
-										}
-
-										$response = str_ireplace('{'.$repl.'}',$replace_with,$response);									
-
-										break;
-									
-									case 'u':
-										// User attribute
-										$the_rest = implode('.',$tmp);
-										$replace_with = '';
-										$replace_with = $this->json_to_string($the_rest,$meta);
-										// Iterate through each "or" statement on the $right
-										$right_conditions = explode('|',$right);
-										if(empty($right_conditions)){
-											$right_conditions = array('');
-										}
-										$tmp_any = false;
-										foreach($right_conditions as $right_condition){
-											if($right_condition == $replace_with){
-												$tmp_any = true;
-											}
-										}
-										if(!$tmp_any){
-											$all = false;
-											break 2;
-										}
-										break;
-
-									default:
-										$response = str_ireplace('{'.$repl.'}','',$response);
-										break;
-
-								}
-
-							}
-
-							// Send SMS
-							// - To and From are switched for outgoing messages (look at the function to remember)
-							$this->Twilio->send_msg($To,$From,$response,$project['Project']['id']);
-
-							// Made a request, great!
-							
 							break;
 
 						case 'webhook':
 							// Parse url
 							$url = $action['input1'];
 							$words = explode(' ',$Body);
-							$url = $this->replace_url_brackets($words,$url);
+							$url = $this->Project->replace_url_brackets($words,$url);
+
 							// Make Request
-							// - always a GET?
+							// - always a GET? (should be able to POST with data also. Put EXACTLY what they want to POST. How to handle variables?)
+							// - wrap these variables with {{var_here}} like Mustache
 							$this->Curl =& ClassRegistry::init('Curl');
 							$this->Curl->url = $url;
 							//$this->Curl->post = true;
@@ -505,17 +574,149 @@ class TextsController extends AppController {
 							$result = $this->Curl->execute();
 
 							// Try parsing JSON
+							$is_json = 0;
 							try {
 								$json = json_decode($result);
+								$is_json = 1;
 							} catch (Exception $e){
 								// Failed, just continue to the next Action
 								// - log the failure for the User
+								
+							}
+
+							if($is_json){
+								// Process the returned values
+								// - see if any attributes were set, messages to send, etc.
+
+								// Set Attributes
+								if(isset($json->set_attributes)){
+
+									// Set the attributes
+									// - only set attributes as in the current environment
+									$set_attributes = $json->set_attributes;
+
+									$options = array('obj' => $set_attributes,
+													 'use_obj' => true,
+													 'user_meta' => Configure::read('user_meta'),
+													 'app_meta' => Configure::read('app_meta'),
+													 'action_id' => $action['id'],
+													 'pp_id' => $pp['PhonesProject']['id']);
+									
+									$status = $this->Project->set_attributes($options);
+
+									// Update Meta attributes
+									Configure::write('user_meta',$status['user_meta']);
+									Configure::write('app_meta',$status['app_meta']);
+
+									//pr('done in texts');
+									//exit;
+
+
+										// This is basically an object we could be setting (not in json_format either)
+										// - merge arrays should do it?
+										//		- cannot merge objects though
+										
+										// Traverse the entire thing and append values as necessary
+										// - using 'u' => 'hello' would erase it?
+										// - then 'u' => array() would erase 'hello'?
+										// - using 'u' => array('here') would simply append
+										
+										//$key = 'path to value we are changing';
+										
+								}
+
+								// Set State
+								
+								if(isset($json->set_state)){
+									// Can set the state for multiple people
+									$set_state = $json->set_state;
+									if(is_string($set_state)){
+										// Set the current user's state
+
+									  	$options = array('new_state' => $set_state,
+									  					 'old_state' => $pp['PhonesProject']['state'],
+									  					 'action_id' => $action['id'],
+									  					 'pp_id' => $pp['PhonesProject']['id']);
+										
+										$this->Project->set_state($options);
+									} else {
+										// Set State for multiple users
+										// - not currently working
+									}
+								}
+								
+
+
+								// Send SMS messages
+								if(isset($json->send_sms)){
+									// Expecting an array of Objects to send to
+									// - "To" can be an array also
+									$send_sms = $json->send_sms;
+									if(is_string($send_sms)){
+										// Sending a single SMS to the current user
+										// - turn it into the format for below
+										$send_sms = array(array('Body' => $send_sms));
+									}
+
+									$send_sms = (array)$send_sms;
+
+									if(is_array($send_sms)){
+										// Iterate through each
+										// - expecting a consistent format of To, Body
+										foreach($send_sms as $new_sms){
+											if(is_object($new_sms)){
+												$new_sms = (array)$new_sms;
+											}
+											if(!is_array($new_sms)){
+												// Missing the To, Body
+												pr('missing array of arrays');
+												continue;
+											}
+											if(!isset($new_sms['To'])){
+												$new_sms['To'] = $From;
+											}
+											if(!isset($new_sms['Body'])){
+												pr('missing the Body field');
+												continue;
+											}
+
+											// Send the SMS to whoever
+											$options = array('action_id' => $action['id'],
+															 'message' => $new_sms['Body'],
+															 'To' => $new_sms['To'],
+															 'From' => $To);
+											$status = $this->Project->response($options);
+
+											
+										}
+
+									}
+									
+								}
+
+
+							}
+
+							// Log request and response
+							$logData = array('project_id' => $project['Project']['id'],
+											 'related_id' => $action['id'],
+											 'request_hash' => Configure::read('request_hash'),
+											 'type' => 'action_webhook',
+											 'data' => json_encode(array('url' => $url,
+											 							 'response' => $result,
+											 							 'is_json' => $is_json))
+											 );
+							$this->ProjectLog->create();
+							$this->ProjectLog->save($logData);
+
+							if(!$is_json){
+								// Do not add to global values because it is not JSON
 								continue;
 							}
 
 							// Save the JSON data for use later
-							// - in response templates :)
-							//$action_json[] = $json;
+							// - useful in response templates :)
+							// - adds to any existing webhook calls
 							$action_json[] = $json;
 
 							break;
@@ -526,6 +727,26 @@ class TextsController extends AppController {
 							// - only supports the user for now
 
 							// Respond with whatever was set
+
+
+							$options = array('field' => $action['input1'],
+											  'user_meta' => Configure::read('user_meta'),
+											  'app_meta' => Configure::read('app_meta'),
+											  'action_id' => $action['id'],
+											  'pp_id' => $pp['PhonesProject']['id']);
+
+							$status = $this->Project->set_attributes($options);
+
+							// Update Meta attributes
+							Configure::write('user_meta',$status['user_meta']);
+							Configure::write('app_meta',$status['app_meta']);
+
+							break;
+
+
+							// OLD
+
+
 
 							// Parse the response Template
 							$response = $action['input1'];
@@ -543,144 +764,24 @@ class TextsController extends AppController {
 								}
 
 								// Left side is attribute, Right side is value (or | "pipe" separated values)
-								$left = Sanitize::paranoid($tmp[0],array('.','{','}'));
-								$right = Sanitize::paranoid($tmp[1],array('.','|',',',' ','{','}'));
+								$left = Sanitize::paranoid($tmp[0],array('.','{','}','_'));
+								$right = Sanitize::paranoid($tmp[1],array('.','|',',',' ','{','}','_','-'));
 								if(empty($left)){
 									break;
 								}
 
 								// Do Word replacements
+								// - {2}
 								$tmp_words = explode(' ',$Body);
-								$left = $this->replace_url_brackets($tmp_words,$left);
-								$right = $this->replace_url_brackets($tmp_words,$right);
-
-								// Get the Attribute to set (it is currently a string, we want an Object)
-								// - parse {r.value} if necessary
-								preg_match_all('/{([^}]+)}/i',$left,$repl_temp);// $repl_temp= "matches" array
-								$replacements = array();
-								if(!empty($repl_temp) && isset($repl_temp[1])){
-									$replacements = $repl_temp[1];
-								}
-								$replacements = array_unique($replacements);
-
-								// Right now we have an array like: [0] = 'u.id'
-
-								// Iterate over each thing to replace
-								foreach($replacements as $repl){
-
-									$tmp = explode('.',$repl);
-									if(count($tmp) <= 1){
-										// Missing the 'u' in 'u.'
-										$left = str_ireplace('{'.$repl.'}','',$left);
-										continue;
-									}
-
-									// Get the replacement value
-									$first_val = array_shift($tmp);
-									switch($first_val){
-										
-										case 'u':
-											// User attribute
-											$the_rest = implode('.',$tmp);
-											$replace_with = '';
-											$replace_with = $this->json_to_string($the_rest,$meta);
-
-											$left = str_ireplace('{'.$repl.'}',$replace_with,$left);
-											break;
-
-										case 'r':
-											// Response JSON object
-
-											// Does the value exist?
-											// - need to do this recursively
-											$the_rest = implode('.',$tmp);
-											$replace_with = '';
-											foreach($action_json as $action_json_obj){
-												$replace_with = $this->json_to_string($the_rest,$action_json_obj);
-											}
-
-											$left = str_ireplace('{'.$repl.'}',$replace_with,$left);
-											
-											break;	
-											
-
-										default:
-											// Trying to set a non-existant value
-											// - is not for the User or Global
-											pr('error=212');
-											$left = str_ireplace('{'.$repl.'}','',$left);
-											continue;
-											break;
-
-									}
-
-								}
+								$left = $this->Project->replace_url_brackets($tmp_words,$left);
+								$right = $this->Project->replace_url_brackets($tmp_words,$right);
 
 
-								// Get the Attribute to set (it is currently a string, we want an Object)
-								// - parse {r.value} if necessary
-								preg_match_all('/{([^}]+)}/i',$right,$repl_temp);// $repl_temp= "matches" array
-								$replacements = array();
-								if(!empty($repl_temp) && isset($repl_temp[1])){
-									$replacements = $repl_temp[1];
-								}
-								$replacements = array_unique($replacements);
-
-								// Right now we have an array like: [0] = 'u.id'
-
-								// Iterate over each thing to replace
-								foreach($replacements as $repl){
-
-									$tmp = explode('.',$repl);
-									if(count($tmp) <= 1){
-										// Missing the 'u' in 'u.'
-										$right = str_ireplace('{'.$repl.'}','',$right);
-										continue;
-									}
-
-									// Get the replacement value
-									$first_val = array_shift($tmp);
-									switch($first_val){
-										
-										case 'u':
-											// User attribute
-											$the_rest = implode('.',$tmp);
-											$replace_with = '';
-											$replace_with = $this->json_to_string($the_rest,$meta);
-
-											$right = str_ireplace('{'.$repl.'}',$replace_with,$right);
-											break;
-
-										case 'r':
-											// Response JSON object
-
-											// Does the value exist?
-											// - need to do this recursively
-											$the_rest = implode('.',$tmp);
-											$replace_with = '';
-											foreach($action_json as $action_json_obj){
-												$replace_with = $this->json_to_string($the_rest,$action_json_obj);
-											}
-
-											$right = str_ireplace('{'.$repl.'}',$replace_with,$right);	
-											
-											break;	
-
-										default:
-											// Trying to set a non-existant value
-											// - is not for the User or Global
-											pr('error=212');
-											$right = str_ireplace('{'.$repl.'}','',$right);
-											continue;
-											break;
-
-									}
-
-								}
+								$left = $this->Project->replace_brackets($left);
+								$right = $this->Project->replace_brackets($right);
 
 
-								// Now the $left side has no {} brackets
-								// - same for the Right side
+								// Now the $left and $right side has no {} brackets
 
 								// Go through and set the actual values
 								
@@ -689,11 +790,39 @@ class TextsController extends AppController {
 								switch($tmp_left[0]){
 
 									case 'u':
-										array_shift($tmp_left);
+										if(count($tmp_left) <= 2 || $tmp_left[1] != 'meta'){
+											// Missing the 'meta' value
+											// - log error
+											pr('expecting u.meta.something');
+											break;
+										}
+
+										array_shift($tmp_left);	// remove "u"
+										array_shift($tmp_left); // remove "meta"
 										$the_rest = implode('.',$tmp_left);
 										$replace_with = '';
-										$meta = $this->set_json($the_rest,$right,$meta);
+
+										$meta = $this->Project->set_json($the_rest,$right,$meta);
 									
+										break;
+									
+									case 'a':
+										// Application variables
+										if(count($tmp_left) <= 1){
+											// Missing the 'meta' value
+											// - log error
+											pr('expecting a.something');
+											break;
+										}
+
+										array_shift($tmp_left);	// remove "a"
+										$the_rest = implode('.',$tmp_left);
+										$replace_with = '';
+
+										$app_meta = $this->Project->set_json($the_rest,$right,$app_meta);
+										pr('just set it');
+										pr($app_meta);
+
 										break;
 									
 									default:
@@ -702,109 +831,60 @@ class TextsController extends AppController {
 										exit;
 								}
 
-							}
+								// Log Attribute setting
+								$logData = array('project_id' => $project['Project']['id'],
+												 'related_id' => $action['id'],
+												 'request_hash' => Configure::read('request_hash'),
+												 'type' => 'action_attribute',
+												 'data' => json_encode(array('tmp' => 'in progress. attr(s) was set though'))
+												 );
+								$this->ProjectLog->create();
+								$this->ProjectLog->save($logData);
 
 
-							// Save the new meta object!
-							// - later, save multiple meta objects, including "g"="global"
-							pr('Updated User Attributes');
-							pr($meta);
-							$new_meta = json_encode($meta);
-							if($new_meta != $original_meta){
-								// Save it
-								$this->PhonesProject->create();
-								$pp_data = array('id' => $pp['PhonesProject']['id'],
-												 'meta' => $new_meta);
-								if(!$this->PhonesProject->save($pp_data)){
-									pr('failed saving PhonesProject meta');
+								// Save the updated User meta object!
+								// - later, save multiple meta objects, including "g"="global"
+								pr('Updated User Attributes');
+								pr($meta);
+								$new_meta = json_encode($meta);
+								if($new_meta != $original_meta){
+									// Save it
+									$this->PhonesProject->create();
+									$pp_data = array('id' => $pp['PhonesProject']['id'],
+													 'meta' => $new_meta);
+									if(!$this->PhonesProject->save($pp_data)){
+										pr('failed saving PhonesProject meta');
+									}
 								}
-							}
 
+
+								// Save the updated Application meta object!
+								pr('Updated Application Attributes');
+								pr($app_meta);
+								$new_app_meta = json_encode($app_meta);
+								if($new_app_meta != $original_app_meta){
+									// Save it
+									$this->Project->create();
+									$project_data = array('id' => $project['Project']['id'],
+													 	  'meta' => $new_app_meta);
+									if(!$this->Project->save($project_data)){
+										pr('Failed saving Project meta');
+									}
+								}
+
+
+							}
 
 							break;
 
 						case 'state':
 
-							$goto_state = trim($action['input1']);
-							
-							// Do Word replacements
-							$tmp_words = explode(' ',$Body);
-							$goto_state = $this->replace_url_brackets($tmp_words,$goto_state);
+						  	$options = array('new_state' => $action['input1'],
+						  					 'old_state' => $pp['PhonesProject']['state'],
+						  					 'action_id' => $action['id'],
+						  					 'pp_id' => $pp['PhonesProject']['id']);
 
-							// Get the Attribute to set (it is currently a string, we want an Object)
-							// - parse {r.value} if necessary
-							preg_match_all('/{([^}]+)}/i',$goto_state,$repl_temp);// $repl_temp= "matches" array
-							$replacements = array();
-							if(!empty($repl_temp) && isset($repl_temp[1])){
-								$replacements = $repl_temp[1];
-							}
-							$replacements = array_unique($replacements);
-
-							// Right now we have an array like: [0] = 'u.id'
-
-							// Iterate over each thing to replace
-							foreach($replacements as $repl){
-
-								$tmp = explode('.',$repl);
-								if(count($tmp) <= 1){
-									// Missing the 'u' or 'r' in 'u.'
-									$goto_state = str_ireplace('{'.$repl.'}','',$goto_state);
-									continue;
-								}
-
-								// Get the replacement value
-								$first_val = array_shift($tmp);
-								switch($first_val){
-									
-									case 'u':
-										// User attribute
-										$the_rest = implode('.',$tmp);
-										$replace_with = '';
-										$replace_with = $this->json_to_string($the_rest,$meta);
-
-										$goto_state = str_ireplace('{'.$repl.'}',$replace_with,$goto_state);
-										break;
-
-									case 'r':
-										// Response JSON object
-
-										// Does the value exist?
-										// - need to do this recursively
-										$the_rest = implode('.',$tmp);
-										$replace_with = '';
-										foreach($action_json as $action_json_obj){
-											$replace_with = $this->json_to_string($the_rest,$action_json_obj);
-										}
-
-										$goto_state = str_ireplace('{'.$repl.'}',$replace_with,$goto_state);	
-										
-										break;	
-
-									default:
-										// Trying to set a non-existant value
-										// - is not for the User or Global
-										pr('error=212');
-										$goto_state = str_ireplace('{'.$repl.'}','',$goto_state);
-										continue;
-										break;
-
-								}
-
-							}
-
-							// Save the new State of the User
-							pr('Updated User State');
-							$new_state = trim($goto_state);
-							if($new_state != $pp['PhonesProject']['state']){
-								// Save it
-								$this->PhonesProject->create();
-								$pp_data = array('id' => $pp['PhonesProject']['id'],
-												 'state' => $new_state);
-								if(!$this->PhonesProject->save($pp_data)){
-									pr('failed saving PhonesProject state');
-								}
-							}
-
+						  	$status = $this->Project->set_state($options);
 
 							break;
 						
@@ -832,123 +912,6 @@ class TextsController extends AppController {
 		exit;
 
 
-
-	}
-
-
-	function replace_url_brackets($words,$url){
-		// $words is the array of words
-
-		// Run a few times
-		for($i=0;$i<100;$i++){
-			// Check for brackets
-			if(stripos($url,'{'.$i.'}') !== false){
-				// Exists
-				// - replace
-				$w = isset($words[$i]) ? $words[$i] :'';
-				$url = str_ireplace('{'.$i.'}',$w,$url);
-			}
-		}
-
-		return $url;
-	}
-
-
-	function json_to_string($str,$obj){
-		// Given a JSON string and a JSON object
-		// - return the correct fucking thing
-
-		// Is this the root level of the string?
-		$tmp = explode('.',$str);
-		if(count($tmp) == 1){
-			// Root level now, return it
-			if(isset($obj->{$str})){
-				return $obj->{$str};
-			} else {
-				return '';
-			}
-		}
-		if(count($tmp) > 1){
-			$first = array_shift($tmp);
-			$the_rest = implode('.',$tmp);
-
-			// Go Deeper
-
-			// $obj->value must exist
-			if(is_numeric($first)){
-				if(isset($obj[$first])){	
-					return $this->json_to_string($the_rest,$obj[$first]);
-				} else {
-					return '';
-				}
-
-			} else {
-				if(isset($obj->{$first})){	
-					return $this->json_to_string($the_rest,$obj->{$first});
-				} else {
-					return '';
-				}
-			}
-			
-		} else {
-			return 'error';
-		}
-
-	}
-
-
-	function set_json($path,$value,$obj){
-		// Given a JSON string and a JSON object
-		// - return the correct fucking thing
-
-
-
-		// Is this the root level of the string?
-		$tmp = explode('.',$path);
-		if(count($tmp) == 0){
-			// Fucked up, probably a trailing "." in the attribute
-			return $obj;
-		}
-		if(count($tmp) == 1){
-			// Root level now, return it
-			$obj->{$tmp[0]} = $value;
-			return $obj;
-		}
-		if(count($tmp) > 1){
-			$first = array_shift($tmp);
-			$the_rest = implode('.',$tmp);
-
-			// Go Deeper
-
-			// Nothing numeric for now
-			if(is_numeric($first)){
-				if(is_array($obj)){
-					if(isset($obj[$first])){	
-						return $this->set_json($the_rest,$value,$obj[$first]);
-					} else {
-						$obj = array();
-						$obj[$first] = new Object();
-						return $this->set_json($the_rest,$value,$obj[$first]);
-					}
-					//return $this->set_json($the_rest,$value,$obj[$first]);
-				} else {
-					$obj = array();
-					$obj[$first] = new Object();
-					return $this->set_json($the_rest,$value,$obj[$first]);
-				}
-			} else {
-				if(isset($obj->{$first})){	
-					return $this->set_json($the_rest,$value,$obj->{$first});
-				} else {
-					$obj->{$first} = new Object();
-					return $this->set_json($the_rest,$value,$obj->{$first});
-				}
-			}
-			
-		} else {
-			pr('error');
-			return 'error';
-		}
 
 	}
 

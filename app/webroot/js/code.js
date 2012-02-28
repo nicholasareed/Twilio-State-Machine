@@ -15,43 +15,13 @@ $(document).ready(function(){
 	$("table.sortable").tablesorter(); 
 
 	// Tabs
-	$('.tabs').tabs()
+	$('.tabbable').tab()
 
 	// Search box
 	$('.search-box input').keypress(function(e){
 		if(e.which == 13){
 	 		$('form.search-box').submit();
 	 		e.preventDefault();
-		}
-	});
-
-	// Select Carrier - Requirements dropdown
-	$('.select-carriers input[type="checkbox"]').bind('change',function(){
-		if($(this).attr('checked') == 'checked'){
-			$('.carrier-warnings[carrier_id="'+$(this).val()+'"]').show();
-		} else {
-			$('.carrier-warnings[carrier_id="'+$(this).val()+'"]').hide();
-		}
-	});
-
-	// Software checkboxes
-	$('.select-software input[type="checkbox"]').bind('change',function(){
-		// Any selected?
-		if($('.select-software input[type="checkbox"]:checked').length){
-			$('#SoftwareNone').removeAttr('checked');
-		} else {
-			$('#SoftwareNone').attr('checked','checked');
-		}
-	});
-
-	// CD same as PT
-	$('#UserCdSamePt').bind('change',function(){
-		if($(this).attr('checked').length){
-			// Match PT info
-			$('#UserCdBank').val($('#UserPtBank').val());
-			$('#UserCdBranch').val($('#UserPtBranch').val());
-			$('#UserCdAccountNumber').val($('#UserPtAccountNumber').val());
-			$('#UserCdRoutingNumber').val($('#UserPtRoutingNumber').val());
 		}
 	});
 
@@ -71,7 +41,67 @@ $(document).ready(function(){
 
 	});
 
-
-
-
 });
+
+
+function scrollToInView(el){
+	// var el = $(jquery object)
+
+	var ps = getPageScroll();
+	var ph = getPageHeight();
+
+	var top = ps[1];
+	var bottom = ps[1] + ph;
+
+	var el_offset = el.offset();
+	var el_top = el_offset.top;
+	var el_bottom = el_offset.top + el.height();
+
+	// Too high?
+	if(el_top < top){
+		$.scrollTo(el,{offset:-50});
+		return;
+	}
+
+	// Too low?
+	if(el_bottom > bottom){
+		var top_offset = -ph + 50;
+		$.scrollTo(el,{offset: top_offset});
+		return;
+	}
+
+	//console.log('in view');
+
+	return;
+
+}
+
+
+// getPageScroll() by quirksmode.com
+function getPageScroll() {
+    var xScroll, yScroll;
+    if (self.pageYOffset) {
+      yScroll = self.pageYOffset;
+      xScroll = self.pageXOffset;
+    } else if (document.documentElement && document.documentElement.scrollTop) {
+      yScroll = document.documentElement.scrollTop;
+      xScroll = document.documentElement.scrollLeft;
+    } else if (document.body) {// all other Explorers
+      yScroll = document.body.scrollTop;
+      xScroll = document.body.scrollLeft;
+    }
+    return new Array(xScroll,yScroll)
+}
+
+// Adapted from getPageSize() by quirksmode.com
+function getPageHeight() {
+    var windowHeight
+    if (self.innerHeight) { // all except Explorer
+      windowHeight = self.innerHeight;
+    } else if (document.documentElement && document.documentElement.clientHeight) {
+      windowHeight = document.documentElement.clientHeight;
+    } else if (document.body) { // other Explorers
+      windowHeight = document.body.clientHeight;
+    }
+    return windowHeight
+}

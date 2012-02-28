@@ -93,7 +93,7 @@ class ConditionsController extends AppController {
 			case 'starts_with':
 				$data['input1'] = $this->data['Condition']['input1'];
 				$data['input1'] = Sanitize::paranoid($data['input1'],Configure::read('regex_chars'));
-				$data['case_sensitive'] = intval($this->data['Condition']['case_sensitive']);
+				//$data['case_sensitive'] = intval($this->data['Condition']['case_sensitive']);
 				break;
 
 			case 'regex':
@@ -173,6 +173,14 @@ class ConditionsController extends AppController {
 			return;
 		}
 
+		$data['id'] = $this->Condition->id;
+
+
+		// Echo out JSON
+		// - newer method of returning
+		echo json_encode($data);
+		exit;
+
 		// Redirect
 		$this->_Flash('Condition Added','nice','/projects/view/'.$step['State']['Project']['id']);
 
@@ -180,7 +188,7 @@ class ConditionsController extends AppController {
 
 
 	function edit($condition_id = null){
-		// Edit an Condition
+		// Edit a Condition
 
 		$condition_id = intval($condition_id);
 
@@ -228,9 +236,9 @@ class ConditionsController extends AppController {
 		switch($condition['Condition']['type']){
 
 			case 'starts_with':
-				$data['input1'] = $this->data['Condition']['input1'];
+				$data['input1'] = $this->data['Data']['input1'];
 				$data['input1'] = Sanitize::paranoid($data['input1'],Configure::read('regex_chars'));
-				$data['case_sensitive'] = intval($this->data['Condition']['case_sensitive']);
+				//$data['case_sensitive'] = intval($this->data['Condition']['case_sensitive']);
 				break;
 
 			case 'regex':
@@ -238,7 +246,7 @@ class ConditionsController extends AppController {
 				return;
 
 			case 'word_count':
-				$tmp = trim($this->data['Condition']['input1']);
+				$tmp = trim($this->data['Data']['input1']);
 				$tmp1 = explode('|',$tmp);
 				$tmp2 = array();
 				foreach($tmp1 as $value){
@@ -254,7 +262,7 @@ class ConditionsController extends AppController {
 				break;
 
 			case 'attribute':
-				$initial = trim($this->data['Condition']['input1']);
+				$initial = trim($this->data['Data']['input1']);
 				$tmp_conditions = explode(',',$initial);
 				$result = array();
 				foreach($tmp_conditions as $key => $tmp_cond){
@@ -294,9 +302,16 @@ class ConditionsController extends AppController {
 		// Save
 		$this->Condition->create();
 		if(!$this->Condition->save($data)){
+			echo jsonError(101,'There were errors saving your condition');
+			exit;
 			$this->_Flash('There were errors saving your Condition, please try again','mean',null);
 			return;
 		}
+
+		// Echo out JSON
+		// - newer method of returning
+		echo jsonSuccess(array_merge($condition['Condition'],$data));
+		exit;
 
 		// Redirect
 		$this->_Flash('Changes Saved','nice','/projects/view/'.$condition['Step']['State']['Project']['id']);
@@ -306,6 +321,11 @@ class ConditionsController extends AppController {
 
 	function remove($condition_id = null, $code = null){
 		// Remove a Condition
+
+		if($this->RequestHandler->isGet()){
+			echo jsonError(101,'Expecting POST');
+			exit;
+		}
 
 		$condition_id = intval($condition_id);
 
@@ -328,10 +348,10 @@ class ConditionsController extends AppController {
 			$this->_Flash('Not your Condition','mean',$this->referer('/'));
 		}
 
-		// Verify Code
+		// Verify Code (NOT DOING)
 		$expected_code = md5('test'.$condition['Condition']['id'].'test'); 
 		if($code != $expected_code){
-			$this->_Flash('Codes did not match','mean',$this->referer('/'));
+			//$this->_Flash('Codes did not match','mean',$this->referer('/'));
 		}
 
 		// Move to live=0
