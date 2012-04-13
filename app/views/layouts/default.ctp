@@ -3,7 +3,7 @@
 <head>
 	<?php echo $this->Html->charset(); ?>
 	<title>
-		<?php echo $title_for_layout; ?>
+		uRespond.com - Fast SMS apps
 	</title>
 	<?php
 		// Favicon
@@ -13,10 +13,14 @@
 		echo $this->Html->script(array('http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js',
 									   'tablesorter.js',
 									   'boostrap-tabs.js',
-									   'bootstrap-twipsy.js',
+									   'bootstrap-modal.js',
+									   //'bootstrap-twipsy.js',
+									   'bootstrap-tooltip.js',
+									   'bootstrap-popover.js',
 									   'jquery.scrollTo.js',
 									   'jquery.tmpl.min.js',
 									   'Keyboard.js',
+									   'jquery.ui.js',
 									   'code_keyboard.js',
 									   'code.js'));
 		if(isset($this->additionalScripts)){
@@ -51,6 +55,10 @@
 
 	<!-- Google Analytics -->
 
+
+	<!-- Modal -->
+	<div class="modal hide" id="addEditModal">
+	</div>
 
 	<?php echo $this->element('sql_dump'); ?>
 </body>

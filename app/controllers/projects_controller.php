@@ -23,14 +23,45 @@ class ProjectsController extends AppController {
 	function index(){
 		// My Projects
 
+		//$this->_Flash('message','nice',null); // testing
+
 		$this->Project =& ClassRegistry::init('Project');
 		$conditions = array('Project.live' => 1,
 							'Project.user_id' => $this->DarkAuth->id);
-		$this->Project->contain();
+		$this->Project->contain(array('Twilio'));
 		$projects = $this->Project->find('all',compact('conditions'));
+		
+		// Fuck it, do a HABTM count of users
+		$this->PhonesProject =& ClassRegistry::init('PhonesProject');
+		foreach($projects as $key => $project){
+			$conditions = array('PhonesProject.project_id' => $project['Project']['id']);
+			$pp = $this->PhonesProject->find('count',compact('conditions'));
+			$projects[$key]['Project']['pp_count'] = $pp;
+		}
+
+
+		// Stats
+		// - numbers and sms messages
+
+
+		// Numbers
+		// - get phone numbers based on plan
+		$this->Plan =& ClassRegistry::init('Plan');
+		$plans = $this->Plan->getPlans();
+		// Plan exists? (not currently checking)
+		$plan = $plans[$this->DarkAuth->DA['User']['plan']];
+
+		$numbers = array();
+
+		$this->Twilio =& ClassRegistry::init('Twilio');
+		$this->Twilio->contain();
+		$conditions = array('Twilio.live' => 1,
+							'Twilio.user_id' => $this->DarkAuth->id);
+		$numbers = $this->Twilio->find('count',compact('conditions'));
+		$extra_numbers = $plan['numbers_count'] - $numbers;
 
 		// Set View variables
-		$this->set(compact('projects'));
+		$this->set(compact('projects','plans','extra_numbers'));
 
 	}
 
@@ -40,7 +71,7 @@ class ProjectsController extends AppController {
 		$project_id = intval($project_id);
 
 		$this->Project =& ClassRegistry::init('Project');
-		$this->Project->contain(array('State.Step' => array('Condition','Action')));
+		$this->Project->contain(array('Twilio','State.Step' => array('Condition','Action')));
 		$conditions = array('Project.id' => $project_id,
 							'Project.user_id' => $this->DarkAuth->id,
 							'Project.live' => 1);
@@ -49,7 +80,16 @@ class ProjectsController extends AppController {
 		if(empty($project)){
 			$this->_Flash('Unable to find Project','mean','/');
 		}
+
+		// Must be my project
+		if($project['Project']['user_id'] != $this->DarkAuth->id){
+			$this->_Flash('Invalid project chosen','mean',$this->referer('/'));
+		}
 		
+		$project['Numbers'] = Set::extract($project['Twilio'],'{n}.friendly');
+		$project['Numbers'] = implode(', ',$project['Numbers']);
+		unset($project['Twilio']);
+
 		echo json_encode($project);
 		exit;
 
@@ -72,9 +112,23 @@ class ProjectsController extends AppController {
 		if(empty($project)){
 			$this->_Flash('Unable to find Project','mean','/');
 		}
-		//pr($project);
-		// Set View variables
-		$this->set(compact('project'));
+
+		// Must be my project
+		if($project['Project']['user_id'] != $this->DarkAuth->id){
+			$this->_Flash('Invalid project chosen','mean',$this->referer('/'));
+		}
+		
+		// Get Twilio Numbers
+		$this->Twilio =& ClassRegistry::init('Twilio');
+		$this->Twilio->contain();
+		$conditions = array('Twilio.project_id' => $project['Project']['id'],
+							'Twilio.live' => 1);
+		$fields = array('ptn','ptn');
+		$twilios = $this->Twilio->find('list',compact('conditions','fields'));
+
+		$this->data = $project;
+
+		$this->set(compact('project','twilios'));
 
 	}
 
@@ -83,7 +137,25 @@ class ProjectsController extends AppController {
 		// Person creating an Application
 		// - cannot already be on a Team
 		
-		// Get possible Twilio numbers?
+		App::import('Vendor','TwilioRest',array('file' => 'Twilio/Twilio.php'));
+
+		// Get possible new Twilio numbers
+		// - get phone numbers based on plan
+		$this->Plan =& ClassRegistry::init('Plan');
+		$plans = $this->Plan->getPlans();
+		// Plan exists? (not currently checking)
+		$plan = $plans[$this->DarkAuth->DA['User']['plan']];
+
+		$numbers = array();
+
+		$this->Twilio =& ClassRegistry::init('Twilio');
+		$this->Twilio->contain();
+		$conditions = array('Twilio.live' => 1,
+							'Twilio.user_id' => $this->DarkAuth->id);
+		$numbers = $this->Twilio->find('count',compact('conditions'));
+		$extra_numbers = $plan['numbers_count'] - $numbers;
+
+		$this->set(compact('extra_numbers'));
 
 		if($this->RequestHandler->isGet()){
 			return;
@@ -112,6 +184,47 @@ class ProjectsController extends AppController {
 			return;
 		}
 
+		// Validate Phone Number for buying
+		// - only letting them choose the area code, we auto-buy a number based on that
+		if($extra_numbers > 0){
+			if(!empty($this->data['Project']['ptn'])){
+				if(strlen($this->data['Project']['ptn']) != 3){
+					$this->Project->invalidate('ptn','Enter an area code');
+					return false;
+				}
+
+				$searchParams['AreaCode'] = $this->data['Project']['ptn'];
+
+				$twilio_client = new Services_Twilio(TWILIO_ID, TWILIO_TOKEN);
+				$available_numbers = $twilio_client->account->available_phone_numbers->getList('US', 'Local', $searchParams);
+				if(empty($available_numbers)) {
+					$this->_Flash('Unable to find any numbers in that Area Code, please try again','mean',null);
+					return false;
+				}
+
+				// Number to use
+				$buy_number = $available_numbers->available_phone_numbers[0]->phone_number;
+				
+				// Choose one of the numbers
+				// - probably should verify everything is working as expected before buying this number
+				try {
+					// Buy the phone number
+					$bought_number = $twilio_client->account->incoming_phone_numbers->create(array('PhoneNumber' => $buy_number,
+																									'SmsUrl' => 'http://incoming.appsprey.com/',
+																									'SmsMethod' => 'POST',
+																									'VoiceUrl' =>'http://incoming.appsprey.com/',
+																									'VoiceMethod' => 'POST',
+																									'StatusCallback' => 'http://incoming.appsprey.com/',
+																									'StatusCallbackMethod' => 'POST'));
+					//$bought_number = 1;
+				} catch (Exception $e) {
+					$this->_Flash('Failed buying number, please try again','mean',null);
+					return false;
+				}
+			}
+
+		}
+
 		// Save
 		$this->Project->create();
 		if(!$this->Project->save($data)){
@@ -121,6 +234,28 @@ class ProjectsController extends AppController {
 
 		// Get Project.id
 		$project_id = $this->Project->id;
+
+		// Link with Twilio
+		// - should have the option to use an existing bought number
+		if(isset($bought_number)){
+			$twilioData = array();
+			$twilioData['project_id'] = $project_id;
+			$twilioData['user_id'] = $this->DarkAuth->id;
+			$twilioData['ptn'] = $buy_number;
+			$twilioData['friendly'] = prettyPhone($buy_number);
+			// Save the Twilio number
+			// - if this fucks up, we're in trouble
+			if(!$this->Twilio->save($twilioData)){
+				// Fuck
+				// - just continue on, this is a big problem though
+			}
+
+
+		} else {
+			// No number stuff done, just create the App
+
+		}
+
 
 		// Build default State, Step, etc.
 
@@ -174,6 +309,54 @@ class ProjectsController extends AppController {
 
 		// Redirect
 		$this->redirect('/projects/view/'.$project_id);
+
+	}
+
+
+	function settings($project_id = null){
+		
+		// Edit Project Settings
+		$project_id = intval($project_id);
+
+		$this->Project =& ClassRegistry::init('Project');
+		$this->Project->contain(array('State.Step' => array('Condition','Action')));
+		$conditions = array('Project.id' => $project_id,
+							'Project.user_id' => $this->DarkAuth->id,
+							'Project.live' => 1);
+		$project = $this->Project->find('first',compact('conditions'));
+
+		if(empty($project)){
+			$this->_Flash('Unable to find Project','mean','/');
+		}
+
+		// Must be my project
+		if($project['Project']['user_id'] != $this->DarkAuth->id){
+			$this->_Flash('Invalid project chosen','mean',$this->referer('/'));
+		}
+
+
+		if($this->RequestHandler->isGet()){
+			$this->data = $project;
+			return;
+		}
+
+		// Parse input
+		// - type cannot be changed
+
+		App::import('Sanitize');
+
+		$data = array();
+		$data['id'] = $project['Project']['id'];
+		$data['enable_state'] = intval($this->data['Project']['enable_state']);
+
+		// Save
+		if(!$this->Project->save($data,false,array_keys($data))){
+			echo jsonError(101,'Failed saving Project Settings');
+			exit;
+		}
+
+		echo jsonSuccess('Settings Saved');
+		exit;
 
 	}
 

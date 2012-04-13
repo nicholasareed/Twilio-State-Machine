@@ -2,8 +2,14 @@
 $(document).ready(function(){
 	//$('[rel=twipsy]').twipsy();
 
+	// Hide Modal
+	$('#addEditModal').modal({
+		show: false
+	})
+
 	// Dropdown example for topbar nav
 	// ===============================
+
 
 	$('li.dropdown').hover(function(){
 		$(this).addClass('open');

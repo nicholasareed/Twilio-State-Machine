@@ -16,6 +16,14 @@ class ConditionsController extends AppController {
 
 	function beforeFilter(){
 
+		App::import('Vendor', 'Markdown', array('file' => 'Markdown/markdown.php'));
+		
+		$this->Help =& ClassRegistry::init('Help');
+		$conditions = array('Help.live' => 1);
+		$helps = $this->Help->find('all',compact('conditions'));
+		$helps = array_combine(Set::extract($helps,'{n}.Help.key'),$helps);
+		$this->set(compact('helps'));
+
 		parent::beforeFilter();
 	}
 
@@ -42,7 +50,8 @@ class ConditionsController extends AppController {
 		}
 
 		// Types
-		$types = array('starts_with' => 'Starts with...',
+		$types = array('starts_with' => 'Starts with',
+						'contains' => 'Contains',
 						'regex' => 'Regular Expression Match',
 						'word_count' => 'Word Count',
 						'attribute' => 'User Attribute',
@@ -92,6 +101,14 @@ class ConditionsController extends AppController {
 
 			case 'starts_with':
 				$data['input1'] = $this->data['Condition']['input1'];
+				$data['case_sensitive'] = intval($this->data['Condition']['case_sensitive']) ? 1 : 0;
+				$data['input1'] = Sanitize::paranoid($data['input1'],Configure::read('regex_chars'));
+				//$data['case_sensitive'] = intval($this->data['Condition']['case_sensitive']);
+				break;
+
+			case 'contains':
+				$data['input1'] = $this->data['Condition']['input1'];
+				$data['case_sensitive'] = intval($this->data['Condition']['case_sensitive']) ? 1 : 0;
 				$data['input1'] = Sanitize::paranoid($data['input1'],Configure::read('regex_chars'));
 				//$data['case_sensitive'] = intval($this->data['Condition']['case_sensitive']);
 				break;
@@ -142,6 +159,7 @@ class ConditionsController extends AppController {
 					$this->_Flash('Invalid characters included. Result does not match input. Result="'.$data['input1'].'"','mean',null);
 					return;
 				}
+				$data['case_sensitive'] = intval($this->data['Condition']['case_sensitive']) ? 1 : 0;
 				break;
 
 			case 'default':
@@ -210,6 +228,7 @@ class ConditionsController extends AppController {
 
 		// Types
 		$types = array('starts_with' => 'Starts with...',
+						'contains' => 'Contains',
 						'regex' => 'Regular Expression Match',
 						'word_count' => 'Word Count',
 						'attribute' => 'User Attribute',
@@ -236,7 +255,15 @@ class ConditionsController extends AppController {
 		switch($condition['Condition']['type']){
 
 			case 'starts_with':
-				$data['input1'] = $this->data['Data']['input1'];
+				$data['input1'] = $this->data['Condition']['input1'];
+				$data['case_sensitive'] = intval($this->data['Condition']['case_sensitive']) ? 1 : 0;
+				$data['input1'] = Sanitize::paranoid($data['input1'],Configure::read('regex_chars'));
+				//$data['case_sensitive'] = intval($this->data['Condition']['case_sensitive']);
+				break;
+
+			case 'contains':
+				$data['input1'] = $this->data['Condition']['input1'];
+				$data['case_sensitive'] = intval($this->data['Condition']['case_sensitive']) ? 1 : 0;
 				$data['input1'] = Sanitize::paranoid($data['input1'],Configure::read('regex_chars'));
 				//$data['case_sensitive'] = intval($this->data['Condition']['case_sensitive']);
 				break;
@@ -246,7 +273,7 @@ class ConditionsController extends AppController {
 				return;
 
 			case 'word_count':
-				$tmp = trim($this->data['Data']['input1']);
+				$tmp = trim($this->data['Condition']['input1']);
 				$tmp1 = explode('|',$tmp);
 				$tmp2 = array();
 				foreach($tmp1 as $value){
@@ -262,7 +289,7 @@ class ConditionsController extends AppController {
 				break;
 
 			case 'attribute':
-				$initial = trim($this->data['Data']['input1']);
+				$initial = trim($this->data['Condition']['input1']);
 				$tmp_conditions = explode(',',$initial);
 				$result = array();
 				foreach($tmp_conditions as $key => $tmp_cond){
@@ -287,6 +314,7 @@ class ConditionsController extends AppController {
 					$this->_Flash('Invalid characters included. Result does not match input. Result="'.$data['input1'].'"','mean',null);
 					return;
 				}
+				$data['case_sensitive'] = intval($this->data['Condition']['case_sensitive']) ? 1 : 0;
 				break;
 
 			case 'default':
@@ -373,10 +401,124 @@ class ConditionsController extends AppController {
 	}
 
 
-	function move(){
+	function move($condition_id = null, $order = null, $step_id = null){
 		// Move a Condition somewhere
 
+		$condition_id = intval($condition_id);
+		$order = intval($order);
+		$step_id = intval($step_id); // Only used when moving to a new Step
+		
+		// Re-order every element (right?)
 
+		if($this->RequestHandler->isGet()){
+			echo jsonError(101,'Expecting POST');
+			exit;
+		}
+
+		// Get Condition
+		$this->Condition =& ClassRegistry::init('Condition');
+		$this->Condition->contain(array('Step.State.Project'));
+		$conditions = array('Condition.id' => $condition_id,
+							'Condition.live' => 1);
+		$condition = $this->Condition->find('first',compact('conditions'));
+		
+		if(empty($condition)){
+			$this->_Flash('Unable to find Condition','mean',$this->referer('/'));
+		}
+
+		// Must be my Condition
+		if($condition['Step']['State']['Project']['user_id'] != $this->DarkAuth->id){
+			$this->_Flash('Not your Condition','mean',$this->referer('/'));
+		}
+
+		// Moving Steps?
+		$this->Step =& ClassRegistry::init('Step');
+		if($step_id != $condition['Condition']['step_id']){
+			// Validate the new step
+			$this->Step->contain(array('State.Project'));
+			$conditions = array('Step.id' => $step_id,
+								'Step.live' => 1);
+			$step = $this->Step->find('first',compact('conditions'));
+
+			// Step Exists?
+			if(empty($step)){
+				echo jsonError(101,'Not in a step');
+				exit;
+			}
+
+			// My Step?
+			if($step['State']['Project']['user_id'] != $this->DarkAuth->id){
+				echo jsonError(101,'Not your Step');
+				exit;
+			}
+
+			$condition['Condition']['step_id'] = $step['Step']['id'];
+
+		}
+
+		$condition['Condition']['order'] = $order;
+
+		$this->Condition->save($condition['Condition']);
+
+		echo jsonSuccess();
+		exit;
+
+		// Get actual order
+		// - re-order motherfuckers
+		$conditions = array('Step.id' => $condition['Condition']['step_id']);
+		$steps = $this->Step->find('all',compact('conditions'));
+
+
+	}
+
+
+	function copy($condition_id = null){
+		// Copy a Condition
+		// - gets inserted below the copied one
+
+		if($this->RequestHandler->isGet()){
+			echo "expecting POST";
+			exit;
+		}
+		// Fucking awesome
+
+		// Add a Condition
+
+		$condition_id = intval($condition_id);
+
+		// Get Condition to Copy
+		$this->Condition =& ClassRegistry::init('Condition');
+		$this->Condition->contain(array('Step.State.Project'));
+		$conditions = array('Condition.id' => $condition_id,
+							'Condition.live' => 1);
+		$condition = $this->Condition->find('first',compact('conditions'));
+
+		if(empty($condition)){
+			$this->_Flash('Did not find Condition','mean',$this->referer('/'));
+		}
+
+		// Must be my Condition
+		if($condition['Step']['State']['Project']['user_id'] != $this->DarkAuth->id){
+			$this->_Flash('Not your Condition','mean',$this->referer('/'));
+		}
+
+		// Remove id
+		unset($condition['Condition']['id']);
+
+		// Save
+		$this->Condition->create();
+		if(!$this->Condition->save($condition['Condition'])){
+			$this->_Flash('There were errors copying your Condition, please try again','mean',null);
+			return;
+		}
+
+		$condition['Condition']['id'] = $this->Condition->id;
+
+
+		// Echo out JSON
+		// - newer method of returning
+		echo json_encode($condition['Condition']);
+		exit;
 
 	}
 

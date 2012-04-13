@@ -1,30 +1,41 @@
 
-<? echo $this->Html->link('Send Test SMS','/',array('class' => 'btn default sendSms')); ?>
-
 <div class="row testSmsRow">
-	<div class="span12">
+	<div class="span6">
 
-		<?php echo $this->Form->create('Text', array('url' => '/texts/project/'.$project['Project']['id'])); ?>
+		<?php echo $this->Form->create('Text', array('id' => 'TextTest', 'url' => '/texts/project/'.$project['Project']['id'])); ?>
 			<fieldset>
-				
-				<div class="alert-message block-message">
-					In DEMO_MODE: No actual SMS messages will be sent, just watch the Log to see what WOULD have happened
+				<!--
+				<div class="alert alert-block">
+					DEMO_MODE: No actual SMS messages will be sent, just watch the Inspector to see what WOULD have happened
+				</div>
+				-->
+
+				<div class="row">
+					<div class="span3">
+						<? echo $this->General->input('Text.to',array('label' => 'To', 'type' => 'select', 'options' => $twilios)); ?>
+					</div>
+					<div class="span3">
+						<? echo $this->General->input('Text.from',array('label' => 'From', 'default' => '+16027059885')); ?>
+					</div>
 				</div>
 
-				<? echo $this->General->input('Text.to',array('label' => 'To','default' => '+12069228264')); ?>
-
-				<? echo $this->General->input('Text.from',array('label' => 'From', 'default' => '+16027059885')); ?>
-
-				<? echo $this->General->input('Text.body',array('label' => 'Body')); ?>
-					
-				<?php echo $this->Form->submit('Fake Send SMS', array('class' => 'btn primary', 'div' => array('class' => 'actions'))); ?>
+				<div class="row">
+					<div class="span3">
+						<? echo $this->General->input('Text.body',array('label' => 'Body')); ?>
+					</div>
+					<div class="span3">
+						<label>&nbsp;</label>
+						<?php echo $this->Form->submit('Test SMS', array('class' => 'btn btn-primary', 'div' => array('class' => 'actions'))); ?>
+					</div>
+				</div>	
+				
 			
 			</fieldset>
 
 		<?php echo $this->Form->end(); ?>
 
 
-		<div id="results2">
+		<div id="results2" class="nodisplay">
 
 		</div>
 
@@ -32,39 +43,24 @@
 
 </div>
 
-<script type="text/javascript">
-	
-	$(document).ready(function(){
+<div class="row">
+	<div class="span6">
 
-		// Capture form submit and re-route
-		$('input[type="submit"]').click(function(e){
-			e.preventDefault();
+		<div>
+			<h3>Inspector <small>[see messages received, actions taken]</small></h3>
+		</div>
 
-			// Submit over ajax
-			var data = {To: $('#TextTo').val(),
-						From: $('#TextFrom').val(),
-						Body: $('#TextBody').val(),
-						debug_mode: $('#TextDebugMode').val()};
+		<div class="log_holder">
+			
+			<p>
+				<? echo $this->Html->link('Refresh','/',array('class' => 'moreLogs')); ?>
+			</p>
 
-			// Ajax query
-			$.ajax({
-				url: '/texts/test',
-				type: 'POST',
-				cache: false,
-				data: data,
-				success: function(responseHtml){
-					//console.log(responseHtml);
-					$('#results').text(responseHtml);
-					$('#results2').html(responseHtml);
-					outgoing();
-				}
-			});
+			<div id="logs">
+				
+			</div>
 
+		</div>
 
-		});
-
-		//outgoing();
-
-	});
-
-</script>
+	</div>
+</div>

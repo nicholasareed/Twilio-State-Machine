@@ -7,7 +7,7 @@ class User extends AppModel {
 
 	// RELATIONSHIPS
 	var $belongsTo = array('Role');
-	var $hasMany = array('Project');
+	var $hasMany = array('Project','Twilio');
 	var $hasOne = array('Profile');
 
 

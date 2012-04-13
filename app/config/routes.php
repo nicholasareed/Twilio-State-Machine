@@ -30,6 +30,8 @@
 /**
  * ...and connect the rest of 'Pages' controller's urls.
  */
+	Router::connect('/pricing', array('controller' => 'users', 'action' => 'pricing'));
+
  	Router::connect('/pages/index', array('controller' => 'pages','action' => 'index'));
  	Router::connect('/pages/add', array('controller' => 'pages','action' => 'add'));
  	Router::connect('/pages/test', array('controller' => 'pages','action' => 'test'));

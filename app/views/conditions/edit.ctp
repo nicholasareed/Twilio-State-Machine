@@ -1,48 +1,68 @@
 
-<!-- Form -->
-<?php echo $this->Form->create('Condition', array('url' => $this->here)); ?>
-	<fieldset>
-		<legend>Edit Condition</legend>
+<div class="modal-header">
+	<a class="close" data-dismiss="modal">×</a>
+	<h3>Edit Condition</h3>
+</div>
 
-		<?
-			echo $this->General->input('Condition.type',array('label' => 'Type', 'type' => 'select', 'empty'=> true, 'options' => $types, 'disabled' => 'disabled'));
-			
-			echo $this->General->input('Condition.type',array('type' => 'hidden'));
+<div class="modal-body">
+
+	<div class="formLeft">
+
+		<!-- Form -->
+		<?php echo $this->Form->create('Condition', array('url' => $this->here, 'class' => 'form-stacked editing editingCondition')); ?>
+			<fieldset>
+
+				<?
+					echo $this->General->input('Condition.type',array('label' => false, 'type' => 'select', 'empty'=> true, 'options' => $types, 'disabled' => 'disabled'));
 					
-			switch($type_chosen){
+					echo $this->General->input('Condition.type',array('type' => 'hidden'));
+							
+					switch($type_chosen){
 
-				case 'starts_with':
-					echo $this->General->input('Condition.input1',array('label' => 'Starts with', 'type' => 'text'));
-					echo $this->General->input('Condition.case_sensitive',array('label' => 'Case-sensitive ', 'type' => 'checkbox'));
-					break;
+						case 'starts_with':
+							echo $this->General->input('Condition.input1',array('label' => false, 'type' => 'text'));
+							echo $this->General->input('Condition.case_sensitive',array('label' => 'Case-sensitive ', 'type' => 'checkbox'));
+							break;
 
-				case 'regex':
-					echo $this->General->input('Condition.input1',array('label' => 'Regular Expression', 'type' => 'text', 'help' => 'check out this '.$this->Html->link('great resource','http://gskinner.com/RegExr/')));
-					break;
+						case 'contains':
+							echo $this->General->input('Condition.input1',array('label' => false, 'type' => 'text'));
+							echo $this->General->input('Condition.case_sensitive',array('label' => 'Case-sensitive ', 'type' => 'checkbox'));
+							break;
+							
+						case 'regex':
+							echo $this->General->input('Condition.input1',array('label' => false, 'type' => 'text', 'help' => 'check out this '.$this->Html->link('great resource','http://gskinner.com/RegExr/')));
+							break;
 
-				case 'word_count':
-					echo $this->General->input('Condition.input1',array('label' => 'Number of Words', 'type' => 'text'));
-					break;
+						case 'word_count':
+							echo $this->General->input('Condition.input1',array('label' => false, 'type' => 'text'));
+							break;
 
-				case 'attribute':
-					echo $this->General->input('Condition.input1',array('label' => 'User Attribute', 'type' => 'text', 'help' => 'Example: u.meta.registered=1,u.meta.name=nick reed'));
-					break;
+						case 'attribute':
+							echo $this->General->input('Condition.input1',array('label' => false, 'type' => 'text', 'help' => 'Example: u.meta.registered=1,u.meta.name=nick reed'));
+							echo $this->General->input('Condition.case_sensitive',array('label' => 'Case-sensitive ', 'type' => 'checkbox'));
+							break;
 
-				case 'default':
-					// 'default' automatically adds the Step
-					break;
+						case 'default':
+							// 'default' automatically adds the Step
+							break;
 
-				default:
-					break;
+						default:
+							break;
 
-			}
+					}
 
 
-			echo $this->Form->submit('Save Condition', array('class' => 'btn primary', 'div' => array('class' => 'actions'), 'after' => $this->Html->link('Remove Condition','/conditions/remove/'.$condition['Condition']['id'],array('class' => 'remove_on_edit'))));
-			
+					echo $this->Form->submit('Save Condition', array('class' => 'btn btn-primary', 'div' => array('class' => 'actions')));
+					
 
-		?>
+				?>
 
-	</fieldset>
+			</fieldset>
 
-<?php echo $this->Form->end(); ?>
+		<?php echo $this->Form->end(); ?>
+	</div>
+
+	<div class="formRight">
+		<? echo Markdown($helps['condition']['Help']['markdown']); ?>
+	</div>
+</div>

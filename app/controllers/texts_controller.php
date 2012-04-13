@@ -11,7 +11,7 @@ class TextsController extends AppController {
 
 	var $components = array();
 
-	var $doVerifyTwilio = true;
+	var $doVerifyTwilio = true; // default: true
 
 
 	// FUNCTIONS
@@ -99,16 +99,17 @@ class TextsController extends AppController {
 	}
 
 
-
 	function verify_twilio($key = null){
 		// Use your Twilio AuthToken here.  Case matters.
 		$MY_KEY = $key;
- 
-		$expected_signature = $_SERVER["HTTP_X_TWILIO_SIGNATURE"];
-		$string_to_sign = $_SERVER['SCRIPT_URI'];
-		if(strlen($_SERVER['QUERY_STRING']))
+ 		
+		$expected_signature = $_SERVER['HTTP_X_TWILIO_SIGNATURE'];
+		$string_to_sign = TWILIO_ENDPOINT_URL; //$_SERVER['SCRIPT_URI'];
+		
+		if(strlen($_SERVER['QUERY_STRING'])){
+			// This does not run when in POST mode?
 			$string_to_sign .= "?{$_SERVER['QUERY_STRING']}";
-
+		}
 		if(isset($_POST)) {
 			$data = $_POST;
 			ksort($data);
@@ -117,7 +118,7 @@ class TextsController extends AppController {
 		}
  
 		$calculated_signature = base64_encode(hash_hmac("sha1", $string_to_sign, $MY_KEY, true));
- 
+ 	
 		if($calculated_signature == $expected_signature)
 			return true;
 		else
@@ -146,6 +147,7 @@ class TextsController extends AppController {
 		// - but we can do basic X-Twilio header checks
 
 		// X-Twilio Header Checks
+
 		if($this->doVerifyTwilio && !isset($_SERVER["HTTP_X_TWILIO_SIGNATURE"])){
 			$this->renderError(1);
 		}
@@ -171,7 +173,7 @@ class TextsController extends AppController {
 
 		// Get Application for incoming PTN
 		$this->Twilio =& ClassRegistry::init('Twilio');
-		$this->Twilio->contain(array('User.Profile','Project'));
+		$this->Twilio->contain(array('User','Project'));
 		$conditions = array('Twilio.ptn' => $To,
 							'Twilio.live' => 1);
 		$twilio = $this->Twilio->find('first',compact('conditions'));
@@ -182,13 +184,14 @@ class TextsController extends AppController {
 		}
 
 		// User and Profile exist?
-		if(!isset($twilio['User']) || !isset($twilio['User']['Profile']) || !isset($twilio['User']['Profile']['id']) || empty($twilio['User']['Profile']['id'])){
+		//if(!isset($twilio['User']) || !isset($twilio['User']['Profile']) || !isset($twilio['User']['Profile']['id']) || empty($twilio['User']['Profile']['id'])){
+		if(!isset($twilio['User'])){
 			$this->renderError(4);
 		}
 
 		// Verify that this is from Twilio
 		// - disable verification if we are testing
-		if($this->doVerifyTwilio && !$this->verify_twilio($rwilio['User']['Profile']['twilio_secret'])){
+		if($this->doVerifyTwilio && !$this->verify_twilio(TWILIO_TOKEN)){
 			echo "Twilio verification failed";
 			exit;
 			$this->renderError(5);
@@ -207,7 +210,7 @@ class TextsController extends AppController {
 		$project_id = $twilio['Project']['id'];
 
 		$this->Project =& ClassRegistry::init('Project');
-		$this->Project->contain(array('User.Profile','State.Step' => array('Condition','Action')));
+		$this->Project->contain(array('User','State.Step' => array('Condition','Action')));
 		$conditions = array('Project.id' => $project_id,
 							'Project.live' => 1);
 		$project = $this->Project->find('first',compact('conditions'));
@@ -228,8 +231,10 @@ class TextsController extends AppController {
 		Configure::write('Project.id', $project['Project']['id']);
 
 		// Set Twilio variables
-		Configure::write('twilio_id',$project['User']['Profile']['twilio_id']);
-		Configure::write('twilio_secret',$project['User']['Profile']['twilio_secret']);
+		//Configure::write('twilio_id',$project['User']['Profile']['twilio_id']);
+		//Configure::write('twilio_token',$project['User']['Profile']['twilio_token']);
+		Configure::write('twilio_id',TWILIO_ID);
+		Configure::write('twilio_token',TWILIO_TOKEN);
 
 		// Request Hash
 		// - keep all requests together
@@ -394,6 +399,15 @@ class TextsController extends AppController {
 						}
 						break;
 
+					case 'contains':
+						// Case-insensitive
+						// - not using RegEx
+						$tmp = stripos($Body,$condition['input1']);
+						if($tmp !== false){
+							$matched = true;
+						}
+						break;
+
 					case 'word_count':
 						// Case-insensitive
 						// - not using RegEx
@@ -542,19 +556,33 @@ class TextsController extends AppController {
 
 					switch($action['type']){
 
-						case 'response':
+						case 'send_sms':
 							// Respond with whatever was set
 
 							// Parse the response Template
 							$message = $action['input1'];
 
 							// Parse out the {r.value} stuff
+							$words = explode(' ',$Body);
+							$recipients = $action['send_sms_recipients'];
+							$recipients = $this->Project->replace_url_brackets($words,$recipients);
 
+							// Determine the Recipient it is going
+							if(empty($action['send_sms_recipients'])){
+								$new_To = array($From);
+							} else {
+								$new_To = explode(',',$recipients);
+							}
+
+							// Validate phone numbers
+							// - NOT done
+
+							// Send the SMS
 							$options = array('action_id' => $action['id'],
 											 'message' => $message,
-											 'To' => $From,
+											 'To' => $new_To,
 											 'From' => $To);
-							$status = $this->Project->response($options);
+							$status = $this->Project->send_sms($options);
 
 							break;
 
@@ -685,7 +713,7 @@ class TextsController extends AppController {
 															 'message' => $new_sms['Body'],
 															 'To' => $new_sms['To'],
 															 'From' => $To);
-											$status = $this->Project->response($options);
+											$status = $this->Project->send_sms($options);
 
 											
 										}
@@ -697,7 +725,7 @@ class TextsController extends AppController {
 
 							}
 
-							// Log request and response
+							// Log request and send_sms
 							$logData = array('project_id' => $project['Project']['id'],
 											 'related_id' => $action['id'],
 											 'request_hash' => Configure::read('request_hash'),
@@ -718,6 +746,7 @@ class TextsController extends AppController {
 							// - useful in response templates :)
 							// - adds to any existing webhook calls
 							$action_json[] = $json;
+							Configure::write('action_json',$action_json);
 
 							break;
 
@@ -908,6 +937,7 @@ class TextsController extends AppController {
 		// No Steps matched
 		// - log for the User
 		// - this is shitty, because there *should* be a "default" step
+		header('Nostep: noneset');
 		echo "No default step ready to take the leftovers";
 		exit;
 

@@ -104,7 +104,7 @@
 					$sentData = array('project_id' => intval($project_id),
 									  'to_ptn' => $To,
 									  'text' => $Body,
-									  'demo_mode' => Configure::read('demo_mode'));
+									  'demo_mode' => Configure::read('demo_mode') ? '1':0);
 					$this->Sent->create();
 					if(!$this->Sent->save($sentData)){
 						// Failed to save
@@ -129,6 +129,7 @@
 						$Curl->postFieldsArray = compact('From','To','Body');
 						$results[] = array('request' => $Body,
 										   'result' => $Curl->execute()); // Add result to array
+
 					}
 
 				}
@@ -136,7 +137,6 @@
 
 			// Array or Twilio results	
 			// Log this! (json_encoded or something?)
-
 			return $results;
 								
 		}

@@ -7,6 +7,12 @@ class Project extends AppModel {
 	var $hasMany = array('State','Twilio','ProjectLog');
 	var $hasAndBelongsToMany = array('Phone');
 
+	// VALIDATION
+
+	var $validate = array('name' => array('rule' => 'notEmpty',
+										  'message' => 'Name must be at least 1 character',
+										  'allowEmpty' => false,
+										  'required' => true));
 
 	// FUNCTIONS
 
@@ -178,7 +184,7 @@ class Project extends AppModel {
 	}
 
 
-	function response($options = array()){
+	function send_sms($options = array()){
 		
 		$defaults = array('message' => 'message string',
 						  'To' => array(), // default is incoming phone number
@@ -189,20 +195,20 @@ class Project extends AppModel {
 		
 		// Respond with whatever was set
 
-		// Parse the response Template
-		$response = $options['message'];
+		// Parse the send_sms Template
+		$send_sms = $options['message'];
 
 		// Parse out the {r.value} stuff
 
 		// Do all the replacements
-		$response = $this->replace_brackets($response);
+		$send_sms = $this->replace_brackets($send_sms);
 
 		// Send to who?
 		// - sending to multiple people?
 		
 		// Send SMS
 		// - To and From are switched for outgoing messages (look at the function to remember)
-		$this->Twilio->send_msg($options['From'],$options['To'],$response,Configure::read('Project.id'),$options['action_id']);
+		$this->Twilio->send_msg($options['From'],$options['To'],$send_sms,Configure::read('Project.id'),$options['action_id']);
 		
 
 	}
@@ -546,9 +552,10 @@ class Project extends AppModel {
 						
 				case 'u':
 					// User attribute
+					$tmp2 = array_shift($tmp); // get rid of "meta."
 					$the_rest = implode('.',$tmp);
 					$replace_with = '';
-					$replace_with = $this->get_json_value($the_rest,$meta);
+					$replace_with = $this->get_json_value($the_rest,Configure::read('user_meta'));
 
 					$field = str_ireplace('{'.$repl.'}',$replace_with,$field);
 					break;
@@ -557,7 +564,7 @@ class Project extends AppModel {
 					// Application attributes
 					$the_rest = implode('.',$tmp);
 					$replace_with = '';
-					$replace_with = $this->get_json_value($the_rest,$app_meta);
+					$replace_with = $this->get_json_value($the_rest,Configure::read('app_meta'));
 
 					$field = str_ireplace('{'.$repl.'}',$replace_with,$field);
 					break;
@@ -570,6 +577,9 @@ class Project extends AppModel {
 					$the_rest = implode('.',$tmp);
 					$replace_with = '';
 					$action_json = Configure::read('action_json');
+					if(!$action_json){
+						$action_json = array();
+					}
 					foreach($action_json as $action_json_obj){
 						$replace_with = $this->get_json_value($the_rest,$action_json_obj);
 					}

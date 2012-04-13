@@ -16,6 +16,14 @@ class ActionsController extends AppController {
 
 	function beforeFilter(){
 
+		App::import('Vendor', 'Markdown', array('file' => 'Markdown/markdown.php'));
+
+		$this->Help =& ClassRegistry::init('Help');
+		$conditions = array('Help.live' => 1);
+		$helps = $this->Help->find('all',compact('conditions'));
+		$helps = array_combine(Set::extract($helps,'{n}.Help.key'),$helps);
+		$this->set(compact('helps'));
+
 		parent::beforeFilter();
 	}
 
@@ -42,7 +50,7 @@ class ActionsController extends AppController {
 		}
 
 		// Types
-		$types = array('response' => 'Respond with...',
+		$types = array('send_sms' => 'Send SMS',
 						'webhook' => 'Webhook (http request to a server)',
 						'attribute' => 'Set Attribute',
 						'state' => 'Set State',
@@ -85,13 +93,18 @@ class ActionsController extends AppController {
 		// Evaluate the rest of the stuff
 		switch($data['type']){
 
-			case 'response':
+			case 'send_sms':
 				$data['input1'] = $this->data['Action']['input1'];
+				$data['send_sms_recipients'] = $this->data['Action']['send_sms_recipients'];
+				$data['send_sms_later_time_text'] = $this->data['Action']['send_sms_later_time_text'];
 				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),array('{','}')));
+				$data['send_sms_recipients'] = Sanitize::paranoid($data['send_sms_recipients'],array_merge(Configure::read('regex_chars'),array('{','}')));
+				$data['send_sms_later_time_text'] = Sanitize::paranoid($data['send_sms_later_time_text'],array_merge(Configure::read('regex_chars'),array('{','}')));
 				break;
 
 			case 'webhook':
 				$data['input1'] = $this->data['Action']['input1'];
+				$data['webhook_can_modify_vars'] = intval($this->data['Action']['webhook_can_modify_vars']) ? 1 : 0;
 				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),Configure::read('http_chars')));
 				break;
 
@@ -169,7 +182,7 @@ class ActionsController extends AppController {
 		}
 
 		// Types
-		$types = array('response' => 'Respond with...',
+		$types = array('send_sms' => 'Send SMS',
 						'webhook' => 'Webhook (http request to a server)',
 						'attribute' => 'Set Attribute',
 						'state' => 'Set State',
@@ -195,23 +208,28 @@ class ActionsController extends AppController {
 
 		switch($action['Action']['type']){
 
-			case 'response':
-				$data['input1'] = $this->data['Data']['input1'];
-				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),Configure::read('http_chars'),array(',','_')));
+			case 'send_sms':
+				$data['input1'] = $this->data['Action']['input1'];
+				$data['send_sms_recipients'] = $this->data['Action']['send_sms_recipients'];
+				$data['send_sms_later_time_text'] = $this->data['Action']['send_sms_later_time_text'];
+				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),array('{','}')));
+				$data['send_sms_recipients'] = Sanitize::paranoid($data['send_sms_recipients'],array_merge(Configure::read('regex_chars'),array('{','}')));
+				$data['send_sms_later_time_text'] = Sanitize::paranoid($data['send_sms_later_time_text'],array_merge(Configure::read('regex_chars'),array('{','}')));
 				break;
 
 			case 'webhook':
-				$data['input1'] = $this->data['Data']['input1'];
+				$data['input1'] = $this->data['Action']['input1'];
+				$data['webhook_can_modify_vars'] = intval($this->data['Action']['webhook_can_modify_vars']) ? 1 : 0;
 				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),Configure::read('http_chars')));
 				break;
 
 			case 'attribute':
-				$data['input1'] = $this->data['Data']['input1'];
+				$data['input1'] = $this->data['Action']['input1'];
 				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),Configure::read('http_chars'),array('{','}',',')));
 				break;
 
 			case 'state':
-				$data['input1'] = $this->data['Data']['input1'];
+				$data['input1'] = $this->data['Action']['input1'];
 				$data['input1'] = Sanitize::paranoid($data['input1'],array_merge(Configure::read('regex_chars'),Configure::read('http_chars'),array('{','}')));
 				break;
 
@@ -234,7 +252,7 @@ class ActionsController extends AppController {
 
 		// Echo out JSON
 		// - newer method of returning
-		echo json_encode(array_merge($action['Action'],$data));
+		echo jsonSuccess(array_merge($action['Action'],$data));
 		exit;
 
 		// Redirect
@@ -297,10 +315,67 @@ class ActionsController extends AppController {
 	}
 
 
-	function move(){
-		// Move a Condition somewhere
+	function move($action_id = null, $order = null, $step_id = null){
+		// Move a Action somewhere
 
+		$action_id = intval($action_id);
+		$order = intval($order);
+		$step_id = intval($step_id); // Only used when moving to a new Step
+		
+		// Re-order every element (right?)
 
+		if($this->RequestHandler->isGet()){
+			echo jsonError(101,'Expecting POST');
+			exit;
+		}
+
+		// Get Action
+		$this->Action =& ClassRegistry::init('Action');
+		$this->Action->contain(array('Step.State.Project'));
+		$conditions = array('Action.id' => $action_id,
+							'Action.live' => 1);
+		$action = $this->Action->find('first',compact('conditions'));
+		
+		if(empty($action)){
+			$this->_Flash('Unable to find Action','mean',$this->referer('/'));
+		}
+
+		// Must be my Action
+		if($action['Step']['State']['Project']['user_id'] != $this->DarkAuth->id){
+			$this->_Flash('Not your Action','mean',$this->referer('/'));
+		}
+
+		// Moving Steps?
+		$this->Step =& ClassRegistry::init('Step');
+		if($step_id != $action['Action']['step_id']){
+			// Validate the new step
+			$this->Step->contain(array('State.Project'));
+			$conditions = array('Step.id' => $step_id,
+								'Step.live' => 1);
+			$step = $this->Step->find('first',compact('conditions'));
+
+			// Step Exists?
+			if(empty($step)){
+				echo jsonError(101,'Not in a step');
+				exit;
+			}
+
+			// My Step?
+			if($step['State']['Project']['user_id'] != $this->DarkAuth->id){
+				echo jsonError(101,'Not your Step');
+				exit;
+			}
+
+			$action['Action']['step_id'] = $step['Step']['id'];
+
+		}
+
+		$action['Action']['order'] = $order;
+
+		$this->Action->save($action['Action']);
+
+		echo jsonSuccess();
+		exit;
 
 	}
 

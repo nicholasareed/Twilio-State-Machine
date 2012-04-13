@@ -1,6 +1,115 @@
 
+var multiSelect = false;
 
 $(document).ready(function(){
+		
+
+		// Track the Ctrl Key (Windows and Mac)
+		KeyboardJS.bind.key('command', function(){
+			multiSelect = true;
+		},function(){
+			multiSelect = false;
+		});
+
+		KeyboardJS.bind.key('backspace', chosenDelete);
+		KeyboardJS.bind.key('delete', chosenDelete);
+		KeyboardJS.bind.key('d', chosenDelete);
+
+
+		function chosenDelete(){
+			// See what we're deleting
+			if($('input:focus').length > 0){
+				console.log($('input:focus'));
+				console.log('input has focus');
+				return;
+			}
+			$('.chosen').each(function(i,elem){
+				// Remove the thing
+				// - awesome
+				var url = $(elem).attr('data-remove-url');
+				// Remove
+				$('input:focus').blur(); // remove Focus from every input
+				$(this).closest('[data-level]').remove();
+				$('.popover').hide(); // temporary fix, doesn't actually remove
+				
+				$.ajax({
+					url: url,
+					cache: false,
+					type: 'POST',
+					success: function(response){
+						try {
+							var json = $.parseJSON(response);
+						} catch(e){
+							// Failed
+							window.location = window.location.href;
+						}
+						console.log(json);
+						if(json.code != 200){
+							window.location = window.location.href;
+						}
+
+						return;
+
+					}
+				});
+			});
+
+			return false;
+		}
+
+
+		// Copying
+
+		KeyboardJS.bind.key('shift + equal', copyElement);
+		function copyElement(){
+			// See what we're deleting
+			if($('input:focus').length > 0){
+				console.log($('input:focus'));
+				console.log('input has focus');
+				return;
+			}
+
+			// Can only be choosing one at a time?
+			// - no real reason, just limiting potential user errors
+			if($('.chosen').length > 1){
+				console.log('Too many chosen to copy. limit=1');
+				return false;
+			}
+
+			$('.chosen').each(function(i,elem){
+				// Remove the thing
+				// - awesome
+				var url = $(elem).attr('data-copy-url');
+				
+				$.ajax({
+					url: url,
+					cache: false,
+					type: 'POST',
+					context: $(elem),
+					success: function(response){
+						try {
+							var json = $.parseJSON(response);
+						} catch(e){
+							// Failed
+							console.log('failed');
+							//window.location = window.location.href;
+							return;
+						}
+
+						// Insert
+						//$(this).insertAfter();
+						$("#t_conditionRow").tmpl(json).insertAfter($(this).closest('[data-level]'));
+
+						return;
+
+					}
+				});
+			});
+
+			return false;
+		}
+
+
 
 		// Saving the result
 		// - when ENTER is pressed (needs to be Keydown to work with Keyboard.js)
@@ -363,7 +472,7 @@ $(document).ready(function(){
 		$('body').on('click','[data-level]',function(e){
 			$('.key-selected').removeClass('key-selected');
 			$(this).addClass('key-selected');
-			e.stopPropagation();
+			//e.stopPropagation();
 		});
 
 
@@ -376,7 +485,7 @@ $(document).ready(function(){
 			}
 
 			// Prevent event bubbling
-			e.stopPropagation();
+			//e.stopPropagation();
 
 			// Get the current depth
 

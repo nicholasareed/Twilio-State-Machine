@@ -253,7 +253,20 @@ function jsonIndent($json){
 }
 
 
-
+function prettyPhone($phone = ''){
+	if(strlen($phone) == 10){
+		$phone = "(".substr($phone,0,3).") ".substr($phone,3,3)."-".substr($phone,6,4);
+		return $phone;
+	} elseif(strlen($phone) == 11) {
+		$phone = "1 (".substr($phone,1,3).") ".substr($phone,4,3)."-".substr($phone,7,4);
+		return $phone;
+	} elseif(strlen($phone) == 12) {
+		$phone = "1 (".substr($phone,2,3).") ".substr($phone,5,3)."-".substr($phone,8,4);
+		return $phone;
+	} else {
+		return $phone;
+	}
+}
 
 
 

@@ -37,7 +37,7 @@ class GeneralHelper extends AppHelper {
 			$extraClasses .= ' '.$options['type'];
 		}
 
-		echo '<div class="clearfix'.$extraClasses.'">';
+		echo '<div class="control-group clearfix'.$extraClasses.'">';
 			
 			// Display checkboxes a little differently 
 			// - label and input switch places
@@ -107,6 +107,9 @@ class GeneralHelper extends AppHelper {
 			return $phone;
 		} elseif(strlen($phone) == 11) {
 			$phone = "1 (".substr($phone,1,3).") ".substr($phone,4,3)."-".substr($phone,7,4);
+			return $phone;
+		} elseif(strlen($phone) == 12) {
+			$phone = "1 (".substr($phone,2,3).") ".substr($phone,5,3)."-".substr($phone,8,4);
 			return $phone;
 		} else {
 			return $phone;
